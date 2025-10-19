@@ -1,6 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import dotenv from "dotenv";
 import { mainMenu, servicesMenu, paymentMenu } from "./constants/menu.js";
+import { services } from "./constants/services.js";
 
 dotenv.config();
 
@@ -14,52 +15,42 @@ bot.onText(/\/start|\/help/, (msg) => {
 });
 
 // Обработка обычных сообщений (кнопки главного меню)
-bot.on('message', (msg) => {
+bot.on("message", (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
-  if (text === 'Услуги') {
+  if (text === "Услуги") {
     showServices(chatId);
-  } else if (text === 'нас') {
-    bot.sendMessage(chatId, "Мы - лучшая юридическая компания!");
-  } else if (text === '📞 Контакты') {
-    bot.sendMessage(chatId, "Наши контакты:\nТелефон: +7 XXX XXX-XX-XX\nEmail: info@example.com");
-  } else if (text === '🛒 Мои заказы') {
-    bot.sendMessage(chatId, "Здесь будут ваши заказы...");
   }
 });
 
 // Показать услуги (inline-кнопки)
 function showServices(chatId) {
   // Сначала скрываем клавиатуру предыдущего сообщения
-  bot.sendMessage(
-    chatId,
-    "⌛ Загружаем услуги...",
-    { reply_markup: { remove_keyboard: true } }
-  ).then(() => {
-    // Затем показываем услуги
-    bot.sendMessage(
-      chatId,
-      "Тут нужен текст описывающий общие услуги",
-      servicesMenu
-    );
-  });
+  bot
+    .sendMessage(chatId, "⌛ Загружаем услуги...", {
+      reply_markup: { remove_keyboard: true },
+    })
+    .then(() => {
+      // Затем показываем услуги
+      bot.sendMessage(chatId, "Выберите услугу:", servicesMenu);
+    });
 }
 
 // Обработка inline-кнопок
-bot.on('callback_query', (callbackQuery) => {
+bot.on("callback_query", (callbackQuery) => {
   const message = callbackQuery.message;
   const chatId = message.chat.id;
   const data = callbackQuery.data;
 
-  if (data.startsWith('service_')) {
-    const serviceNumber = data.split('_')[1];
+  if (data.startsWith("service_")) {
+    const serviceNumber = data.split("_")[1];
     showServiceDetails(chatId, serviceNumber);
-  } else if (data === 'back_to_services') {
+  } else if (data === "back_to_services") {
     showServices(chatId);
-  } else if (data === 'back_to_main') {
-    bot.sendMessage(chatId, 'Главное меню', mainMenu);
-  } else if (data === 'make_payment') {
+  } else if (data === "back_to_main") {
+    bot.sendMessage(chatId, "Главное меню", mainMenu);
+  } else if (data === "make_payment") {
     processPayment(chatId);
   }
 
@@ -67,22 +58,18 @@ bot.on('callback_query', (callbackQuery) => {
 });
 
 function showServiceDetails(chatId, serviceNumber) {
-  const services = {
-    '1': { name: "Подача уведомления в Роскомнадзор", price: 'Цена услуги', description: "Описание услуги" },
-    '2': { name: "Пакет документов для психологов", price: 'Цена услуги', description: "Описание услуги" },
-    '3': { name: "Реклама по новым правилам", price: 'Цена услуги', description: "Описание услуги" }
-  };
-
   const service = services[serviceNumber];
 
-  bot.sendMessage(
-    chatId,
+  const messageText =
     `🎯 ${service.name}\n\n` +
     `📝 ${service.description}\n\n` +
-    `💰 Цена: ${service.price}₽\n\n` +
-    `Для оплаты нажмите кнопку ниже:`,
-    paymentMenu
-  );
+    `💰 Стоимость: ${service.price}₽\n\n` +
+    `Для оплаты нажмите кнопку ниже:`;
+
+  bot.sendMessage(chatId, messageText, {
+    parse_mode: "HTML",
+    reply_markup: paymentMenu.reply_markup,
+  });
 }
 
 // Обработка оплаты
@@ -93,7 +80,7 @@ function processPayment(chatId) {
   bot.sendMessage(
     chatId,
     "🔄 Перенаправляем на страницу оплаты...\n\n" +
-    "После успешной оплаты вы получите доступ к услуге."
+      "После успешной оплаты вы получите доступ к услуге."
   );
 
   // Через 2 секунды "успешная оплата"
@@ -101,7 +88,7 @@ function processPayment(chatId) {
     bot.sendMessage(
       chatId,
       "✅ Оплата прошла успешно!\n\n" +
-      "Ваша услуга активирована. Специалист свяжется с вами в течение 24 часов."
+        "Ваша услуга активирована. Специалист свяжется с вами в течение 24 часов."
     );
   }, 2000);
 }

@@ -17,7 +17,7 @@ export const servicesMenu = {
     inline_keyboard: [
       [
         {
-          text: "Подача уведомления в Роскомнадзор",
+          text: "Подача уведомления в РКН",
           callback_data: "service_1"
         }
       ],
@@ -48,7 +48,7 @@ export const paymentMenu = {
     inline_keyboard: [
       [
         {
-          text: "💳 Оплатить",
+          text: "💳 Перейти к оформлению",
           callback_data: "make_payment"
         }
       ],
