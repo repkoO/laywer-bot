@@ -2,11 +2,17 @@ import TelegramBot from "node-telegram-bot-api";
 import dotenv from "dotenv";
 import { mainMenu, servicesMenu, paymentMenu } from "./constants/menu.js";
 import { services } from "./constants/services.js";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
 const TOKEN = process.env.ACCESS_TOKEN;
 const bot = new TelegramBot(TOKEN, { polling: true });
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Хранилище данных пользователей (в продакшене лучше использовать БД)
 const userData = new Map();
@@ -26,7 +32,22 @@ bot.onText(/\/start|\/help/, (msg) => {
   const chatId = msg.chat.id;
   userState.delete(chatId);
   userData.delete(chatId);
-  bot.sendMessage(chatId, "Добро пожаловать! Выберите опцию:", mainMenu);
+  const photoDir = path.join(__dirname, "assets", "hello.jpg");
+  const caption = `Всех приветствую!
+Меня зовут Нина, практикующий юрист и автор проекта Call My Lawyer ⚖️
+Я и моя команда помогаем компаниям и предпринимателям чувствовать себя уверенно в юридических вопросах.
+
+В этом боте вы можете:
+— выбрать и заказать юридические услуги,
+— получить юридические материалы и чек-листы,
+— получать рассылку об изменениях в законах и рекомендации от меня.
+
+Всё просто, прозрачно и по делу — как я люблю 💼`
+  bot.sendPhoto(chatId, photoDir, {
+    parse_mode: "Markdown",
+    caption: caption,
+    reply_markup: mainMenu.reply_markup
+  });
 });
 
 // Обработка обычных сообщений (кнопки главного меню)
@@ -265,3 +286,27 @@ function processPayment(chatId) {
 }
 
 console.log("Bot started!");
+
+// Errors
+
+// Обработка ошибок polling
+bot.on('polling_error', (error) => {
+  console.error('Polling error:', error.code, error.message);
+
+  if (error.code === 'EFATAL') {
+    console.log('Fatal error, restarting bot...');
+    setTimeout(() => {
+      bot.startPolling();
+    }, 5000);
+  }
+});
+
+// Обработка ошибок вебхука
+bot.on('webhook_error', (error) => {
+  console.error('Webhook error:', error);
+});
+
+// Обработка общих ошибок
+bot.on('error', (error) => {
+  console.error('General error:', error);
+});
