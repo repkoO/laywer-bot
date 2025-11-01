@@ -3,7 +3,6 @@ import dotenv from "dotenv";
 import { mainMenu, servicesMenu, paymentMenu } from "./constants/menu.js";
 import { services } from "./constants/services.js";
 import path from "path";
-import fs from "fs";
 import { fileURLToPath } from "url";
 
 dotenv.config();
@@ -114,7 +113,7 @@ function showServices(chatId) {
   ).then(() => {
     bot.sendMessage(
       chatId,
-      "",
+      "Выберите услугу:",
       servicesMenu
     );
   });
@@ -253,6 +252,7 @@ function showOrderSummary(chatId) {
 }
 
 // Обработка оплаты
+// Обработка оплаты
 function processPayment(chatId) {
   const data = userData.get(chatId);
   const service = data.selectedService;
@@ -260,8 +260,9 @@ function processPayment(chatId) {
   const paymentKeyboard = {
     reply_markup: {
       inline_keyboard: [
-        [{ text: "💳 Перейти к оплате", url: services.paymentUrl }],
-        [{ text: "✅ Я оплатил", callback_data: "check_payment" }]
+        [{ text: "💳 Перейти к оплате", url: service.paymentUrl }],
+        [{ text: "✅ Я оплатил", callback_data: "check_payment" }],
+        [{ text: "↩️ Назад к услугам", callback_data: "back_to_services" }]
       ]
     }
   };
@@ -270,8 +271,8 @@ function processPayment(chatId) {
     chatId,
     `🔄 Ваш заказ создан!\n\n` +
     `Для оплаты перейдите по ссылке ниже:\n\n` +
-    `💰 Сумма: ${services.price}₽\n` +
-    `🎯 Услуга: ${services.name}`,
+    `💰 Сумма: ${service.price}₽\n` +
+    `🎯 Услуга: ${service.name}`,
     paymentKeyboard
   );
 }

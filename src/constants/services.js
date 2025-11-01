@@ -11,7 +11,7 @@ export const services = {
       • pdf-файл с необходимыми сведениями для подачи;
       • Бонус - чек-лист для проверки сайта на соответствие требованиям закона.
       `,
-    payment_url:
+    paymentUrl:
       "https://auth.robokassa.ru/merchant/Invoice/nMJZ0X6JQkOpFvlsHtrBJQ",
   },
   2: {
@@ -26,7 +26,7 @@ export const services = {
 
       Создан с учётом практики психологов и юридических требований.
       `,
-    payment_url:
+    paymentUrl:
       "https://auth.robokassa.ru/merchant/Invoice/p9HSzQtRWUmbEDqqBdT-2Q",
   },
   3: {
@@ -42,7 +42,7 @@ export const services = {
       • Разбор реальных кейсов и ответы на вопросы
 
       🎥 Запись и материалы остаются у вас навсегда.`,
-    payment_url:
+    paymentUrl:
       "https://auth.robokassa.ru/merchant/Invoice/4NIWz2zyXUiYenuLdSOG_A",
   },
 };
