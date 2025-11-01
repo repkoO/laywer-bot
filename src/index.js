@@ -114,7 +114,7 @@ function showServices(chatId) {
   ).then(() => {
     bot.sendMessage(
       chatId,
-      "Выберите услугу:",
+      "",
       servicesMenu
     );
   });
@@ -255,34 +255,25 @@ function showOrderSummary(chatId) {
 // Обработка оплаты
 function processPayment(chatId) {
   const data = userData.get(chatId);
+  const service = data.selectedService;
 
-  // Сохраняем данные пользователя (здесь можно добавить запись в БД)
-  console.log('Данные пользователя сохранены:', {
-    chatId,
-    ...data,
-    timestamp: new Date().toISOString()
-  });
+  const paymentKeyboard = {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "💳 Перейти к оплате", url: services.paymentUrl }],
+        [{ text: "✅ Я оплатил", callback_data: "check_payment" }]
+      ]
+    }
+  };
 
   bot.sendMessage(
     chatId,
-    "🔄 Перенаправляем на страницу оплаты...\n\n" +
-    "После успешной оплаты вы получите доступ к услуге."
+    `🔄 Ваш заказ создан!\n\n` +
+    `Для оплаты перейдите по ссылке ниже:\n\n` +
+    `💰 Сумма: ${services.price}₽\n` +
+    `🎯 Услуга: ${services.name}`,
+    paymentKeyboard
   );
-
-  // Имитация успешной оплаты
-  setTimeout(() => {
-    bot.sendMessage(
-      chatId,
-      "✅ Оплата прошла успешно!\n\n" +
-      "Ваша услуга активирована. Специалист свяжется с вами в течение 24 часов.\n\n" +
-      "Спасибо за заказ!",
-      mainMenu
-    );
-
-    // Очищаем состояние пользователя
-    userState.delete(chatId);
-    userData.delete(chatId);
-  }, 2000);
 }
 
 console.log("Bot started!");
