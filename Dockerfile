@@ -12,7 +12,6 @@ COPY . .
 RUN mkdir -p assets
 
 # Указываем переменные окружения
-ENV NODE_ENV=production
 ENV PORT=3000
 
 # Открываем порт
