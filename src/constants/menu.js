@@ -11,12 +11,8 @@ export const servicesMenu = {
     inline_keyboard: [
       [{ text: "Подача уведомления в РКН", callback_data: "service_1" }],
       [{ text: "Пакет документов для психолога", callback_data: "service_2" }],
-      [
-        {
-          text: "Вебинар «Реклама по новым правлам»",
-          callback_data: "service_3",
-        },
-      ],
+      [{ text: "Вебинар «Реклама по новым правлам»", callback_data: "service_3" }],
+      [{  text: "Получить видео урок", callback_data: "service_4" }]
       [{ text: "← Назад", callback_data: "back_to_main" }],
     ],
   },

@@ -45,4 +45,11 @@ export const services = {
     paymentUrl:
       "https://auth.robokassa.ru/merchant/Invoice/4NIWz2zyXUiYenuLdSOG_A",
   },
+  4: {
+    name: "Получить видео урок",
+    price: "0",
+    description: "Описание услуги",
+    paymentUrl:
+      "",
+  },
 };
