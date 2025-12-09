@@ -164,7 +164,7 @@ function showServiceDetails(chatId, serviceNumber) {
   const messageText =
     `🎯 ${service.name}\n\n` +
     `📝 ${service.description}\n\n` +
-    `💰 Стоимость: ${priceText}₽\n\n` +
+    `💰 Стоимость: ${priceText}\n\n` +
     `Для оплаты нажмите кнопку ниже:`;
 
 bot.sendMessage(
@@ -247,7 +247,7 @@ function showOrderSummary(chatId) {
   const summaryText =
     `📋 <b>Сводка заказа</b>\n\n` +
     `🎯 Услуга: ${service.name}\n` +
-    `💰 Стоимость: ${priceText}₽\n\n` +
+    `💰 Стоимость: ${priceText}\n\n` +
     `<b>Ваши данные:</b>\n` +
     `👤 Имя: ${data.name}\n` +
     `📞 Телефон: ${data.phone}\n` +
@@ -295,7 +295,7 @@ function processPayment(chatId) {
 
 function handleFreeService(chatId, userData) {
   const service = userData.selectedService;
-  const videoLink = service.videUrl;
+  const videoLink = service.videoUrl;
 
   const freeServiceKeyboard = {
     reply_markup: {
@@ -311,7 +311,7 @@ function handleFreeService(chatId, userData) {
     `🎉 Ваш заказ оформлен!\n\n` +
     `🎯 Услуга: ${service.name}\n` +
     `💰 Стоимость: Бесплатно\n\n` +
-    `🔗 Ссылка на видео-урок:\n${videoLink}\n\n` +
+    `🔗 Ссылка на видео-урок:\n${videoLink}\n\n`,
     freeServiceKeyboard
   );
   userData.delete(chatId);
