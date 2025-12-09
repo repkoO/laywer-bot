@@ -10,7 +10,7 @@ import { open } from "sqlite";
 dotenv.config();
 
 const TOKEN = process.env.ACCESS_TOKEN;
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || "your_admin_chat_id_here";
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || "258095033";
 const bot = new TelegramBot(TOKEN, { polling: true });
 
 const __filename = fileURLToPath(import.meta.url);
@@ -89,18 +89,6 @@ async function getAllOrders() {
     `);
   } catch (error) {
     console.error('Error fetching orders:', error);
-    return [];
-  }
-}
-
-async function getOrdersByChatId(chatId) {
-  try {
-    return await db.all(
-      `SELECT * FROM orders WHERE chat_id = ? ORDER BY created_at DESC`,
-      [chatId]
-    );
-  } catch (error) {
-    console.error('Error fetching user orders:', error);
     return [];
   }
 }
