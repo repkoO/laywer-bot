@@ -4,7 +4,7 @@ import { mainMenu, servicesMenu, paymentMenu } from "./constants/menu.js";
 import { services } from "./constants/services.js";
 import path from "path";
 import { fileURLToPath } from "url";
-import sqlite3 from "sqlite3";
+import sqlite from "sqlite";
 import { open } from "sqlite";
 
 dotenv.config();
@@ -21,7 +21,7 @@ let db;
 (async () => {
   db = await open({
     filename: './database.sqlite',
-    driver: sqlite3.Database
+    driver: sqlite.Database
   });
 
   // Создаем таблицу заказов
@@ -44,7 +44,7 @@ let db;
   console.log("Database initialized");
 })();
 
-// Хранилище данных пользователей 
+// Хранилище данных пользователей
 const userData = new Map();
 const userState = new Map();
 
