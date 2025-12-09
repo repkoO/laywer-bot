@@ -44,7 +44,7 @@ let db;
   console.log("Database initialized");
 })();
 
-// Хранилище данных пользователей (временное, пока идет процесс оформления)
+// Хранилище данных пользователей 
 const userData = new Map();
 const userState = new Map();
 
