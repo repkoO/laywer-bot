@@ -393,13 +393,46 @@ async function processPayment(chatId) {
   const data = userData.get(chatId);
   const service = data.selectedService;
 
-  // Сохраняем заказ в файл
-  await saveOrderToFile(chatId, data, service, false);
-
+  // Для бесплатных услуг проверяем, нет ли уже активного заказа
   if (service.price === "0" || service.price === 0 || parseFloat(service.price) === 0) {
+    const activeOrder = await getUserActiveOrder(chatId);
+
+    // Если у пользователя уже есть неоплаченный заказ на эту услугу
+    if (activeOrder && activeOrder.service_name === service.name && !activeOrder.is_paid) {
+      // Просто показываем ссылку на видео без создания нового заказа
+      const videoLink = service.videoUrl || service.paymentUrl;
+      const freeServiceKeyboard = {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "▶️ Получить видео", url: videoLink }],
+            [{ text: "↩️ К другим услугам", callback_data: "back_to_services" }]
+          ]
+        }
+      };
+
+      bot.sendMessage(
+        chatId,
+        `🎉 Вот ваша ссылка на видео-урок:\n\n` +
+        `🔗 ${videoLink}`,
+        freeServiceKeyboard
+      );
+
+      // Обновляем заказ как оплаченный (бесплатная услуга)
+      await markOrderAsPaidInFile(activeOrder.id);
+
+      // Очищаем временные данные
+      userData.delete(chatId);
+      userState.delete(chatId);
+      return;
+    }
+
+    // Если активного заказа нет, продолжаем стандартный процесс
     handleFreeService(chatId, data);
     return;
   }
+
+  // Сохраняем заказ в файл (для платных услуг)
+  await saveOrderToFile(chatId, data, service, false);
 
   const paymentKeyboard = {
     reply_markup: {
@@ -441,7 +474,7 @@ async function handleFreeService(chatId, userDataObj) {
   const service = userDataObj.selectedService;
   const videoLink = service.videoUrl || service.paymentUrl;
 
-  // Сохраняем бесплатный заказ в файл
+  // Сохраняем бесплатный заказ в файл как оплаченный сразу
   await saveOrderToFile(chatId, userDataObj, service, true);
 
   const freeServiceKeyboard = {
@@ -478,6 +511,22 @@ async function handleFreeService(chatId, userDataObj) {
   // Очищаем временные данные
   userData.delete(chatId);
   userState.delete(chatId);
+}
+
+async function getUserActiveOrder(chatId) {
+  try {
+    const orders = await loadOrders();
+    // Ищем последний неоплаченный заказ пользователя
+    const userOrders = orders.filter(order => order.chat_id === chatId);
+    if (userOrders.length > 0) {
+      // Возвращаем последний заказ
+      return userOrders[userOrders.length - 1];
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting user active order:', error);
+    return null;
+  }
 }
 
 console.log("Bot started!");
