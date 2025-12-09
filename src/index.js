@@ -1,11 +1,10 @@
 import TelegramBot from "node-telegram-bot-api";
 import dotenv from "dotenv";
-import { mainMenu, servicesMenu, paymentMenu } from "./constants/menu.js";
+import { mainMenu, servicesMenu } from "./constants/menu.js";
 import { services } from "./constants/services.js";
 import path from "path";
 import { fileURLToPath } from "url";
-import sqlite from "sqlite";
-import { open } from "sqlite";
+import fs from "fs/promises";
 
 dotenv.config();
 
@@ -16,35 +15,31 @@ const bot = new TelegramBot(TOKEN, { polling: true });
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Инициализация базы данных
-let db;
-(async () => {
-  db = await open({
-    filename: './database.sqlite',
-    driver: sqlite.Database
-  });
+// Хранилище данных в JSON файле
+const ORDERS_FILE = './orders.json';
 
-  // Создаем таблицу заказов
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS orders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      chat_id INTEGER,
-      name TEXT,
-      phone TEXT,
-      email TEXT,
-      service_name TEXT,
-      service_price TEXT,
-      service_description TEXT,
-      payment_url TEXT,
-      is_paid BOOLEAN DEFAULT 0,
-      payment_date TIMESTAMP,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  console.log("Database initialized");
-})();
+// Загрузка заказов из файла
+async function loadOrders() {
+  try {
+    const data = await fs.readFile(ORDERS_FILE, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    // Если файла нет, создаем пустой массив
+    await saveOrders([]);
+    return [];
+  }
+}
 
-// Хранилище данных пользователей
+// Сохранение заказов в файл
+async function saveOrders(orders) {
+  try {
+    await fs.writeFile(ORDERS_FILE, JSON.stringify(orders, null, 2));
+  } catch (error) {
+    console.error('Error saving orders:', error);
+  }
+}
+
+// Хранилище данных пользователей (временное)
 const userData = new Map();
 const userState = new Map();
 
@@ -57,38 +52,47 @@ const USER_STATES = {
   READY_FOR_PAYMENT: 'ready_for_payment'
 };
 
-// Функции для работы с базой данных
-async function saveOrderToDatabase(chatId, data, service, isPaid = false) {
+// Функции для работы с заказами
+async function saveOrderToFile(chatId, data, service, isPaid = false) {
   try {
-    await db.run(
-      `INSERT INTO orders (chat_id, name, phone, email, service_name, service_price, service_description, payment_url, is_paid, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      [
-        chatId,
-        data.name,
-        data.phone,
-        data.email,
-        service.name,
-        service.price,
-        service.description,
-        service.paymentUrl || service.videoUrl,
-        isPaid ? 1 : 0
-      ]
-    );
+    const orders = await loadOrders();
+    const order = {
+      id: orders.length + 1,
+      chat_id: chatId,
+      name: data.name,
+      phone: data.phone,
+      email: data.email,
+      service_name: service.name,
+      service_price: service.price,
+      service_description: service.description,
+      payment_url: service.paymentUrl || service.videoUrl,
+      is_paid: isPaid,
+      created_at: new Date().toISOString()
+    };
+
+    orders.push(order);
+    await saveOrders(orders);
     console.log(`Order saved for user ${chatId}`);
   } catch (error) {
-    console.error('Error saving order to database:', error);
+    console.error('Error saving order to file:', error);
   }
 }
 
-async function getAllOrders() {
+async function getAllOrdersFromFile() {
   try {
-    return await db.all(`
-      SELECT * FROM orders
-      ORDER BY created_at DESC
-    `);
+    return await loadOrders();
   } catch (error) {
     console.error('Error fetching orders:', error);
+    return [];
+  }
+}
+
+async function getOrdersByChatIdFromFile(chatId) {
+  try {
+    const orders = await loadOrders();
+    return orders.filter(order => order.chat_id === chatId);
+  } catch (error) {
+    console.error('Error fetching user orders:', error);
     return [];
   }
 }
@@ -126,21 +130,20 @@ bot.onText(/\/start|\/help/, (msg) => {
 bot.onText(/\/orders/, async (msg) => {
   const chatId = msg.chat.id;
 
-  // Проверяем, является ли пользователь администратором
   if (!isAdmin(chatId)) {
     bot.sendMessage(chatId, "⛔ У вас нет прав доступа к этой команде.");
     return;
   }
 
   try {
-    const orders = await getAllOrders();
+    const orders = await getAllOrdersFromFile();
 
     if (orders.length === 0) {
       bot.sendMessage(chatId, "📭 Заказов пока нет.");
       return;
     }
 
-    // Отправляем по 10 заказов за раз, чтобы не превысить лимит сообщения
+    // Отправляем по 10 заказов за раз
     for (let i = 0; i < orders.length; i += 10) {
       const chunk = orders.slice(i, i + 10);
       let message = `📊 Всего заказов: ${orders.length}\n\n`;
