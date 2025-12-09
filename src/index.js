@@ -9,7 +9,7 @@ import fs from "fs/promises";
 dotenv.config();
 
 const TOKEN = process.env.ACCESS_TOKEN;
-const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || "258095033";
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || "854129215";
 const bot = new TelegramBot(TOKEN, { polling: true });
 
 const __filename = fileURLToPath(import.meta.url);
