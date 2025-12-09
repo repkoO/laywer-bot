@@ -393,8 +393,8 @@ async function processPayment(chatId) {
   const data = userData.get(chatId);
   const service = data.selectedService;
 
-  // Сохраняем заказ в базу данных
-  await saveOrderToDatabase(chatId, data, service, false);
+  // Сохраняем заказ в файл
+  await saveOrderToFile(chatId, data, service, false);
 
   if (service.price === "0" || service.price === 0 || parseFloat(service.price) === 0) {
     handleFreeService(chatId, data);
@@ -441,8 +441,8 @@ async function handleFreeService(chatId, userDataObj) {
   const service = userDataObj.selectedService;
   const videoLink = service.videoUrl || service.paymentUrl;
 
-  // Сохраняем бесплатный заказ в базу
-  await saveOrderToDatabase(chatId, userDataObj, service, true);
+  // Сохраняем бесплатный заказ в файл
+  await saveOrderToFile(chatId, userDataObj, service, true);
 
   const freeServiceKeyboard = {
     reply_markup: {
