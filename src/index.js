@@ -57,7 +57,7 @@ async function saveOrderToFile(chatId, data, service, isPaid = false) {
   try {
     const orders = await loadOrders();
     const order = {
-      id: orders.length + 1,
+      id: orders.length > 0 ? Math.max(...orders.map(o => o.id)) + 1 : 1,
       chat_id: chatId,
       name: data.name,
       phone: data.phone,
@@ -71,8 +71,25 @@ async function saveOrderToFile(chatId, data, service, isPaid = false) {
     };
 
     orders.push(order);
-    await saveOrders(orders);
-    console.log(`Order saved for user ${chatId}`);
+
+    // Сохраняем только 10 последних заказов
+    const maxOrders = 10;
+    if (orders.length > maxOrders) {
+      // Удаляем самые старые заказы
+      orders.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      const ordersToKeep = orders.slice(-maxOrders);
+
+      // Переиндексируем ID
+      ordersToKeep.forEach((order, index) => {
+        order.id = index + 1;
+      });
+
+      await saveOrders(ordersToKeep);
+    } else {
+      await saveOrders(orders);
+    }
+
+    console.log(`Order saved for user ${chatId}. Total orders: ${orders.length}`);
   } catch (error) {
     console.error('Error saving order to file:', error);
   }
