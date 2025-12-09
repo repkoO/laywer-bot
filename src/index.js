@@ -4,16 +4,47 @@ import { mainMenu, servicesMenu, paymentMenu } from "./constants/menu.js";
 import { services } from "./constants/services.js";
 import path from "path";
 import { fileURLToPath } from "url";
+import sqlite3 from "sqlite3";
+import { open } from "sqlite";
 
 dotenv.config();
 
 const TOKEN = process.env.ACCESS_TOKEN;
+const ADMIN_CHAT_ID = process.env.ADMIN_CHAT_ID || "your_admin_chat_id_here";
 const bot = new TelegramBot(TOKEN, { polling: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Хранилище данных пользователей (в продакшене лучше использовать БД)
+// Инициализация базы данных
+let db;
+(async () => {
+  db = await open({
+    filename: './database.sqlite',
+    driver: sqlite3.Database
+  });
+
+  // Создаем таблицу заказов
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chat_id INTEGER,
+      name TEXT,
+      phone TEXT,
+      email TEXT,
+      service_name TEXT,
+      service_price TEXT,
+      service_description TEXT,
+      payment_url TEXT,
+      is_paid BOOLEAN DEFAULT 0,
+      payment_date TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  console.log("Database initialized");
+})();
+
+// Хранилище данных пользователей (временное, пока идет процесс оформления)
 const userData = new Map();
 const userState = new Map();
 
@@ -25,6 +56,59 @@ const USER_STATES = {
   AWAITING_EMAIL: 'awaiting_email',
   READY_FOR_PAYMENT: 'ready_for_payment'
 };
+
+// Функции для работы с базой данных
+async function saveOrderToDatabase(chatId, data, service, isPaid = false) {
+  try {
+    await db.run(
+      `INSERT INTO orders (chat_id, name, phone, email, service_name, service_price, service_description, payment_url, is_paid, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [
+        chatId,
+        data.name,
+        data.phone,
+        data.email,
+        service.name,
+        service.price,
+        service.description,
+        service.paymentUrl || service.videoUrl,
+        isPaid ? 1 : 0
+      ]
+    );
+    console.log(`Order saved for user ${chatId}`);
+  } catch (error) {
+    console.error('Error saving order to database:', error);
+  }
+}
+
+async function getAllOrders() {
+  try {
+    return await db.all(`
+      SELECT * FROM orders
+      ORDER BY created_at DESC
+    `);
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    return [];
+  }
+}
+
+async function getOrdersByChatId(chatId) {
+  try {
+    return await db.all(
+      `SELECT * FROM orders WHERE chat_id = ? ORDER BY created_at DESC`,
+      [chatId]
+    );
+  } catch (error) {
+    console.error('Error fetching user orders:', error);
+    return [];
+  }
+}
+
+// Проверка является ли пользователь администратором
+function isAdmin(chatId) {
+  return chatId.toString() === ADMIN_CHAT_ID.toString();
+}
 
 // Обработка команды /start
 bot.onText(/\/start|\/help/, (msg) => {
@@ -41,12 +125,62 @@ bot.onText(/\/start|\/help/, (msg) => {
 — получить юридические материалы и чек-листы,
 — получать рассылку об изменениях в законах и рекомендации от меня.
 
-Всё просто, прозрачно и по делу — как я люблю 💼`
+Всё просто, прозрачно и по делу — как я люблю 💼`;
+
   bot.sendPhoto(chatId, photoDir, {
     parse_mode: "Markdown",
     caption: caption,
     reply_markup: mainMenu.reply_markup
   });
+});
+
+// Команда для администратора /orders
+bot.onText(/\/orders/, async (msg) => {
+  const chatId = msg.chat.id;
+
+  // Проверяем, является ли пользователь администратором
+  if (!isAdmin(chatId)) {
+    bot.sendMessage(chatId, "⛔ У вас нет прав доступа к этой команде.");
+    return;
+  }
+
+  try {
+    const orders = await getAllOrders();
+
+    if (orders.length === 0) {
+      bot.sendMessage(chatId, "📭 Заказов пока нет.");
+      return;
+    }
+
+    // Отправляем по 10 заказов за раз, чтобы не превысить лимит сообщения
+    for (let i = 0; i < orders.length; i += 10) {
+      const chunk = orders.slice(i, i + 10);
+      let message = `📊 Всего заказов: ${orders.length}\n\n`;
+
+      chunk.forEach((order, index) => {
+        const orderNumber = i + index + 1;
+        const paidStatus = order.is_paid ? "✅ Оплачен" : "❌ Не оплачен";
+        const date = new Date(order.created_at).toLocaleString('ru-RU');
+
+        message +=
+          `📋 Заказ #${orderNumber}\n` +
+          `👤 Имя: ${order.name}\n` +
+          `📞 Телефон: ${order.phone}\n` +
+          `📧 Email: ${order.email}\n` +
+          `🎯 Услуга: ${order.service_name}\n` +
+          `💰 Цена: ${order.service_price}\n` +
+          `📅 Дата: ${date}\n` +
+          `💳 Статус: ${paidStatus}\n` +
+          `---\n\n`;
+      });
+
+      bot.sendMessage(chatId, message);
+    }
+
+  } catch (error) {
+    console.error('Error in /orders command:', error);
+    bot.sendMessage(chatId, "❌ Произошла ошибка при получении заказов.");
+  }
 });
 
 // Обработка обычных сообщений (кнопки главного меню)
@@ -120,7 +254,7 @@ function showServices(chatId) {
 }
 
 // Обработка inline-кнопок
-bot.on('callback_query', (callbackQuery) => {
+bot.on('callback_query', async (callbackQuery) => {
   const message = callbackQuery.message;
   const chatId = message.chat.id;
   const data = callbackQuery.data;
@@ -150,7 +284,6 @@ bot.on('callback_query', (callbackQuery) => {
 });
 
 function showServiceDetails(chatId, serviceNumber) {
-
   const service = services[serviceNumber];
 
   // Сохраняем выбранную услугу
@@ -158,16 +291,16 @@ function showServiceDetails(chatId, serviceNumber) {
   data.selectedService = service;
   userData.set(chatId, data);
 
-   const priceText = service.price === "0" ? "Бесплатно" : `${service.price}₽`;
+  const priceText = service.price === "0" ? "Бесплатно" : `${service.price}₽`;
   const buttonText = service.price === "0" ? "🎬 Получить доступ" : "💰 Оплатить услугу";
 
   const messageText =
     `🎯 ${service.name}\n\n` +
     `📝 ${service.description}\n\n` +
     `💰 Стоимость: ${priceText}\n\n` +
-    `Для оплаты нажмите кнопку ниже:`;
+    `${service.price === "0" ? "Для получения доступа нажмите кнопку ниже:" : "Для оплаты нажмите кнопку ниже:"}`;
 
-bot.sendMessage(
+  bot.sendMessage(
     chatId,
     messageText,
     {
@@ -233,7 +366,7 @@ function showOrderSummary(chatId) {
   const orderMenu = {
     reply_markup: {
       inline_keyboard: [
-       [{
+        [{
           text: service.price === "0" ? "🎬 Получить видео" : "💳 Перейти к оплате",
           callback_data: "confirm_order"
         }],
@@ -242,7 +375,7 @@ function showOrderSummary(chatId) {
     }
   };
 
-   const priceText = service.price === "0" ? "Бесплатно" : `${service.price}₽`;
+  const priceText = service.price === "0" ? "Бесплатно" : `${service.price}₽`;
 
   const summaryText =
     `📋 <b>Сводка заказа</b>\n\n` +
@@ -265,9 +398,12 @@ function showOrderSummary(chatId) {
 }
 
 // Обработка оплаты
-function processPayment(chatId) {
+async function processPayment(chatId) {
   const data = userData.get(chatId);
   const service = data.selectedService;
+
+  // Сохраняем заказ в базу данных
+  await saveOrderToDatabase(chatId, data, service, false);
 
   if (service.price === "0" || service.price === 0 || parseFloat(service.price) === 0) {
     handleFreeService(chatId, data);
@@ -278,6 +414,7 @@ function processPayment(chatId) {
     reply_markup: {
       inline_keyboard: [
         [{ text: "💳 Перейти к оплате", url: service.paymentUrl }],
+        [{ text: "✅ Я оплатил", callback_data: "mark_as_paid" }],
         [{ text: "↩️ Назад к услугам", callback_data: "back_to_services" }]
       ]
     }
@@ -288,14 +425,33 @@ function processPayment(chatId) {
     `🔄 Ваш заказ создан!\n\n` +
     `Для оплаты перейдите по ссылке ниже:\n\n` +
     `💰 Сумма: ${service.price}₽\n` +
-    `🎯 Услуга: ${service.name}`,
+    `🎯 Услуга: ${service.name}\n\n` +
+    `После оплаты нажмите "✅ Я оплатил"`,
     paymentKeyboard
   );
+
+  // Оповещаем администратора о новом заказе
+  if (ADMIN_CHAT_ID) {
+    const adminMessage =
+      `🆕 Новый заказ!\n\n` +
+      `👤 Имя: ${data.name}\n` +
+      `📞 Телефон: ${data.phone}\n` +
+      `📧 Email: ${data.email}\n` +
+      `🎯 Услуга: ${service.name}\n` +
+      `💰 Цена: ${service.price}₽\n` +
+      `💳 Статус: Ожидает оплаты\n` +
+      `🆔 ID пользователя: ${chatId}`;
+
+    bot.sendMessage(ADMIN_CHAT_ID, adminMessage);
+  }
 }
 
-function handleFreeService(chatId, userData) {
-  const service = userData.selectedService;
-  const videoLink = service.videoUrl;
+async function handleFreeService(chatId, userDataObj) {
+  const service = userDataObj.selectedService;
+  const videoLink = service.videoUrl || service.paymentUrl;
+
+  // Сохраняем бесплатный заказ в базу
+  await saveOrderToDatabase(chatId, userDataObj, service, true);
 
   const freeServiceKeyboard = {
     reply_markup: {
@@ -304,42 +460,47 @@ function handleFreeService(chatId, userData) {
         [{ text: "↩️ К другим услугам", callback_data: "back_to_services" }]
       ]
     }
-  }
+  };
 
   bot.sendMessage(
     chatId,
     `🎉 Ваш заказ оформлен!\n\n` +
     `🎯 Услуга: ${service.name}\n` +
     `💰 Стоимость: Бесплатно\n\n` +
-    `🔗 Ссылка на видео-урок:\n${videoLink}\n\n`,
+    `🔗 Ссылка на видео-урок:\n${videoLink}`,
     freeServiceKeyboard
   );
-  if (userData.has(chatId)) userData.delete(chatId);
-  if (userState.has(chatId)) userState.delete(chatId);
+
+  // Оповещаем администратора о бесплатном заказе
+  if (ADMIN_CHAT_ID) {
+    const adminMessage =
+      `🎬 Новый бесплатный заказ!\n\n` +
+      `👤 Имя: ${userDataObj.name}\n` +
+      `📞 Телефон: ${userDataObj.phone}\n` +
+      `📧 Email: ${userDataObj.email}\n` +
+      `🎯 Услуга: ${service.name}\n` +
+      `🆔 ID пользователя: ${chatId}`;
+
+    bot.sendMessage(ADMIN_CHAT_ID, adminMessage);
+  }
+
+  // Очищаем временные данные
+  userData.delete(chatId);
+  userState.delete(chatId);
 }
 
 console.log("Bot started!");
 
 // Errors
-
-// Обработка ошибок polling
 bot.on('polling_error', (error) => {
   console.error('Polling error:', error.code, error.message);
-
   if (error.code === 'EFATAL') {
-    console.log('Fatal error, restarting bot...');
     setTimeout(() => {
       bot.startPolling();
     }, 5000);
   }
 });
 
-// Обработка ошибок вебхука
-bot.on('webhook_error', (error) => {
-  console.error('Webhook error:', error);
-});
-
-// Обработка общих ошибок
 bot.on('error', (error) => {
   console.error('General error:', error);
 });
