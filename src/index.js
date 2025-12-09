@@ -158,18 +158,26 @@ function showServiceDetails(chatId, serviceNumber) {
   data.selectedService = service;
   userData.set(chatId, data);
 
+   const priceText = service.price === "0" ? "Бесплатно" : `${service.price}₽`;
+  const buttonText = service.price === "0" ? "🎬 Получить доступ" : "💰 Оплатить услугу";
+
   const messageText =
     `🎯 ${service.name}\n\n` +
     `📝 ${service.description}\n\n` +
-    `💰 Стоимость: ${service.price}₽\n\n` +
+    `💰 Стоимость: ${priceText}₽\n\n` +
     `Для оплаты нажмите кнопку ниже:`;
 
-  bot.sendMessage(
+bot.sendMessage(
     chatId,
     messageText,
     {
       parse_mode: "HTML",
-      reply_markup: paymentMenu.reply_markup
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: buttonText, callback_data: "make_payment" }],
+          [{ text: "← Назад к услугам", callback_data: "back_to_services" }]
+        ]
+      }
     }
   );
 }
@@ -225,16 +233,21 @@ function showOrderSummary(chatId) {
   const orderMenu = {
     reply_markup: {
       inline_keyboard: [
-        [{ text: "💳 Перейти к оплате", callback_data: "confirm_order" }],
+       [{
+          text: service.price === "0" ? "🎬 Получить видео" : "💳 Перейти к оплате",
+          callback_data: "confirm_order"
+        }],
         [{ text: "✏️ Изменить данные", callback_data: "back_to_services" }]
       ]
     }
   };
 
+   const priceText = service.price === "0" ? "Бесплатно" : `${service.price}₽`;
+
   const summaryText =
     `📋 <b>Сводка заказа</b>\n\n` +
     `🎯 Услуга: ${service.name}\n` +
-    `💰 Стоимость: ${service.price}₽\n\n` +
+    `💰 Стоимость: ${priceText}₽\n\n` +
     `<b>Ваши данные:</b>\n` +
     `👤 Имя: ${data.name}\n` +
     `📞 Телефон: ${data.phone}\n` +
@@ -252,16 +265,19 @@ function showOrderSummary(chatId) {
 }
 
 // Обработка оплаты
-// Обработка оплаты
 function processPayment(chatId) {
   const data = userData.get(chatId);
   const service = data.selectedService;
+
+  if (service.price === "0" || service.price === 0 || parseFloat(service.price) === 0) {
+    handleFreeService(chatId, data);
+    return;
+  }
 
   const paymentKeyboard = {
     reply_markup: {
       inline_keyboard: [
         [{ text: "💳 Перейти к оплате", url: service.paymentUrl }],
-        [{ text: "✅ Я оплатил", callback_data: "check_payment" }],
         [{ text: "↩️ Назад к услугам", callback_data: "back_to_services" }]
       ]
     }
@@ -275,6 +291,31 @@ function processPayment(chatId) {
     `🎯 Услуга: ${service.name}`,
     paymentKeyboard
   );
+}
+
+function handleFreeService(chatId, userData) {
+  const service = userData.selectedService;
+  const videoLink = service.videUrl;
+
+  const freeServiceKeyboard = {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "▶️ Получить видео", url: videoLink }],
+        [{ text: "↩️ К другим услугам", callback_data: "back_to_services" }]
+      ]
+    }
+  }
+
+  bot.sendMessage(
+    chatId,
+    `🎉 Ваш заказ оформлен!\n\n` +
+    `🎯 Услуга: ${service.name}\n` +
+    `💰 Стоимость: Бесплатно\n\n` +
+    `🔗 Ссылка на видео-урок:\n${videoLink}\n\n` +
+    freeServiceKeyboard
+  );
+  userData.delete(chatId);
+  userState.delete(chatId);
 }
 
 console.log("Bot started!");
