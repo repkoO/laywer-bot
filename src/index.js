@@ -314,8 +314,8 @@ function handleFreeService(chatId, userData) {
     `🔗 Ссылка на видео-урок:\n${videoLink}\n\n`,
     freeServiceKeyboard
   );
-  userData.delete(chatId);
-  userState.delete(chatId);
+  if (userData.has(chatId)) userData.delete(chatId);
+  if (userState.has(chatId)) userState.delete(chatId);
 }
 
 console.log("Bot started!");
