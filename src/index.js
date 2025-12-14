@@ -337,9 +337,9 @@ function showConsentForm(chatId) {
   const consentText =
     `📋 <b>Согласие на обработку персональных данных</b>\n\n` +
     `Нажимая кнопку "Согласен", вы подтверждаете:\n\n` +
-    `• Согласие на обработку персональных данных в соответствии с <a href="https://drive.google.com/drive/folders/11E5KSDpYaxeGVi0pp3b27su0H6F0FHbk">Политикой обработки ПДн</a>\n` +
-    `• Принятие условий <a href="https://drive.google.com/drive/folders/11E5KSDpYaxeGVi0pp3b27su0H6F0FHbk">Публичной оферты</a>\n` +
-    `• Согласие с <a href="https://drive.google.com/drive/folders/11E5KSDpYaxeGVi0pp3b27su0H6F0FHbk">Условиями предоставления услуг</a>`;
+    `• Согласие на обработку персональных данных в соответствии с <a href="https://drive.google.com/file/d/11XAWXuFeEMtmKZis0deQBsZEEGzWzPWC/view?usp=sharing">Политикой обработки ПДн</a>\n` +
+    `• Принятие условий <a href="https://drive.google.com/file/d/1TlontZGvs9nTqmUC4XKchMGvgFjbUfYC/view?usp=drive_link">Публичной оферты</a>\n` +
+    `• Согласие с <a href="https://drive.google.com/file/d/1TtOodK-VuY7rU3RjEoKz95jvsdQ5nwiP/view?usp=drive_link">Условиями предоставления услуг</a>`;
 
   userState.set(chatId, USER_STATES.AWAITING_CONSENT);
 
