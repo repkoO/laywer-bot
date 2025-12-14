@@ -5,6 +5,7 @@ import { services } from "./constants/services.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs/promises";
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -17,6 +18,14 @@ const __dirname = path.dirname(__filename);
 
 // Хранилище данных в JSON файле
 const ORDERS_FILE = './orders.json';
+
+const ROBOKASSA_CONFIG = {
+  merchantLogin: process.env.ROBOKASSA_MERCHANT_LOGIN,
+  password1: process.env.ROBOKASSA_PASSWORD1,
+  password2: process.env.ROBOKASSA_PASSWORD2,
+  isTest: process.env.ROBOKASSA_TEST === 'true',
+  resultUrl: `https://repkoo-laywer-bot-72c5.twc1.net/robokassa-result`,
+};
 
 // Загрузка заказов из файла
 async function loadOrders() {
@@ -93,6 +102,31 @@ async function saveOrderToFile(chatId, data, service, isPaid = false) {
   } catch (error) {
     console.error('Error saving order to file:', error);
   }
+}
+
+// После функции saveOrderToFile (~строка 90)
+function generateRobokassaPaymentLink(orderData) {
+  const { merchantLogin, password1, isTest } = ROBOKASSA_CONFIG;
+  const { outSum, invId, description, email } = orderData;
+
+  // Генерация подписи
+  const signatureString = `${merchantLogin}:${outSum}:${invId}:${password1}`;
+  const signature = crypto.createHash('md5').update(signatureString).digest('hex');
+
+  // Формирование URL
+  let url = `https://auth.robokassa.ru/Merchant/Index.aspx?` +
+    `MerchantLogin=${merchantLogin}&` +
+    `OutSum=${outSum}&` +
+    `InvId=${invId}&` +
+    `Description=${encodeURIComponent(description)}&` +
+    `SignatureValue=${signature}&` +
+    `Email=${email}`;
+
+  if (isTest) {
+    url += '&IsTest=1';
+  }
+
+  return url;
 }
 
 async function getAllOrdersFromFile() {
@@ -286,11 +320,36 @@ bot.on('callback_query', async (callbackQuery) => {
     bot.sendMessage(chatId, "❌ Для оформления заказа необходимо согласие с условиями.");
   } else if (data === 'confirm_order') {
     processPayment(chatId);
+  } else if (data.startsWith('check_payment_')) {
+    const invId = data.split('_')[2];
+    checkPaymentStatus(chatId, invId);
   }
 
   bot.answerCallbackQuery(callbackQuery.id);
 });
 
+// После функции processPayment
+async function checkPaymentStatus(chatId, invId) {
+  try {
+    const orders = await loadOrders();
+    const order = orders.find(o => o.paymentId == invId && o.chat_id == chatId);
+
+    if (!order) {
+      bot.sendMessage(chatId, "❌ Заказ не найден");
+      return;
+    }
+
+    if (order.is_paid) {
+      // Отправляем материалы
+      await sendPaymentMaterials(chatId, order);
+    } else {
+      bot.sendMessage(chatId, "⏳ Оплата еще не поступила. Попробуйте проверить позже.");
+    }
+  } catch (error) {
+    console.error('Error checking payment:', error);
+    bot.sendMessage(chatId, "❌ Ошибка при проверке оплаты");
+  }
+}
 function showServiceDetails(chatId, serviceNumber) {
   const service = services[serviceNumber];
 
@@ -427,6 +486,24 @@ async function processPayment(chatId) {
         }
       };
 
+       const invId = Date.now();
+
+         await saveOrderToFile(chatId, {
+          ...data,
+          paymentId: invId,
+          paymentStatus: 'pending'
+        }, service, false);
+
+        const paymentData = {
+          outSum: service.price,
+          invId: invId,
+          description: `Оплата услуги: ${service.name}`,
+          email: data.email,
+          chatId: chatId
+        };
+
+        const paymentUrl = generateRobokassaPaymentLink(paymentData);
+
       bot.sendMessage(
         chatId,
         `🎉 Вот ваша ссылка на видео-урок:\n\n` +
@@ -460,6 +537,13 @@ async function processPayment(chatId) {
       ]
     }
   };
+
+  if (ADMIN_CHAT_ID) {
+    const adminMessage = `🆕 Новый заказ!\n\n...` +
+      `🔢 Номер заказа: ${invId}\n` +
+      `🔗 Ссылка на оплату: ${paymentUrl}`;
+    bot.sendMessage(ADMIN_CHAT_ID, adminMessage);
+  }
 
   bot.sendMessage(
     chatId,
@@ -560,4 +644,91 @@ bot.on('polling_error', (error) => {
 
 bot.on('error', (error) => {
   console.error('General error:', error);
+});
+
+import express from 'express';
+
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Маршрут для получения уведомлений от Robokassa
+app.post('/robokassa-result', async (req, res) => {
+  try {
+    const { OutSum, InvId, SignatureValue } = req.body;
+
+    // Проверяем подпись
+    const signatureString = `${OutSum}:${InvId}:${ROBOKASSA_CONFIG.password2}`;
+    const calculatedSignature = crypto.createHash('md5').update(signatureString).digest('hex');
+
+    if (calculatedSignature.toLowerCase() !== SignatureValue.toLowerCase()) {
+      console.error('Invalid signature from Robokassa');
+      return res.send(`ERROR`);
+    }
+
+    // Обновляем статус заказа
+    const orders = await loadOrders();
+    const orderIndex = orders.findIndex(o => o.paymentId == InvId);
+
+    if (orderIndex !== -1) {
+      orders[orderIndex].is_paid = true;
+      orders[orderIndex].paid_at = new Date().toISOString();
+      orders[orderIndex].paymentStatus = 'completed';
+
+      await saveOrders(orders);
+
+      // Отправляем материалы пользователю
+      const order = orders[orderIndex];
+      await sendPaymentMaterials(order.chat_id, order);
+
+      // Оповещаем администратора
+      if (ADMIN_CHAT_ID) {
+        const adminMsg = `✅ Оплата получена!\n\n` +
+          `🔢 Номер заказа: ${InvId}\n` +
+          `💰 Сумма: ${OutSum} руб.\n` +
+          `👤 Пользователь: ${order.name}`;
+        bot.sendMessage(ADMIN_CHAT_ID, adminMsg);
+      }
+    }
+
+    res.send(`OK${InvId}`);
+  } catch (error) {
+    console.error('Error processing Robokassa result:', error);
+    res.send('ERROR');
+  }
+});
+
+// Функция отправки материалов после оплаты
+async function sendPaymentMaterials(chatId, order) {
+  const service = services.find(s => s.name === order.service_name);
+
+  if (service) {
+    const materialsKeyboard = {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "📥 Получить материалы", url: service.videoUrl || service.paymentUrl }],
+          [{ text: "↩️ К другим услугам", callback_data: "back_to_services" }]
+        ]
+      }
+    };
+
+    bot.sendMessage(
+      chatId,
+      `✅ Оплата подтверждена!\n\n` +
+      `🎯 Услуга: ${order.service_name}\n` +
+      `💰 Сумма: ${order.service_price}₽\n\n` +
+      `🔗 Ссылка на материалы:`,
+      materialsKeyboard
+    );
+
+    // Очищаем временные данные
+    userData.delete(chatId);
+    userState.delete(chatId);
+  }
+}
+
+// Запуск сервера
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Webhook server started on port ${PORT}`);
 });

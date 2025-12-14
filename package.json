@@ -21,6 +21,7 @@
   "homepage": "https://github.com/repkoO/laywer-bot#readme",
   "dependencies": {
     "dotenv": "^17.2.3",
+    "express": "^5.2.1",
     "node-telegram-bot-api": "^0.66.0"
   }
 }
